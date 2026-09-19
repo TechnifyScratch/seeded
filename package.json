@@ -1,0 +1,43 @@
+{
+  "name": "seeded",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:db": "node --import tsx scripts/test-db.ts",
+    "skills:import": "python3 scripts/import_skills.py",
+    "admin:create": "node --env-file=.env.local --import tsx scripts/create-admin.ts"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "@supabase/ssr": "^0.7.0",
+    "@anthropic-ai/sdk": "^0.65.0",
+    "zod": "^4.1.0",
+    "three": "^0.180.0",
+    "@react-three/fiber": "^9.3.0",
+    "@react-three/drei": "^10.7.0",
+    "lucide-react": "^0.468.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.180.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.0.0",
+    "vitest": "^3.2.0",
+    "tsx": "^4.20.0",
+    "@electric-sql/pglite": "^0.3.10"
+  },
+  "type": "module"
+}
