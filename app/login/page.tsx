@@ -6,6 +6,9 @@ import { KeyRound, ArrowRight } from "lucide-react";
 export default function Login() {
   const router = useRouter();
   const [code, setCode] = useState("");
+  const [needsName, setNeedsName] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   return (
@@ -15,8 +18,14 @@ export default function Login() {
           Seeded<span>.</span>
         </Link>
         <div className="eyebrow">PRIVATE RESEARCH WORKSPACE</div>
-        <h1>Enter your access code.</h1>
-        <p>Your invitation to observe the experiment.</p>
+        <h1>
+          {needsName ? "Set up your profile." : "Enter your access code."}
+        </h1>
+        <p>
+          {needsName
+            ? "Enter the name to save for this access code."
+            : "Your invitation to observe the experiment."}
+        </p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -26,10 +35,17 @@ export default function Login() {
               const response = await fetch("/api/auth/code", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code }),
+                body: JSON.stringify({
+                  code,
+                  ...(needsName ? { firstName, lastName } : {}),
+                }),
               });
               const result = await response.json();
               if (!response.ok) throw new Error(result.error);
+              if (result.needsName) {
+                setNeedsName(true);
+                return;
+              }
               setCode("");
               router.push("/live");
               router.refresh();
@@ -56,17 +72,50 @@ export default function Login() {
                 autoFocus
                 value={code}
                 placeholder="Paste your access code"
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setNeedsName(false);
+                  setFirstName("");
+                  setLastName("");
+                }}
               />
             </div>
           </label>
+          {needsName && (
+            <>
+              <label>
+                First name
+                <input
+                  autoComplete="given-name"
+                  required
+                  maxLength={80}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </label>
+              <label>
+                Last name
+                <input
+                  autoComplete="family-name"
+                  required
+                  maxLength={80}
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </label>
+            </>
+          )}
           {error && (
             <p role="alert" className="error">
               {error}
             </p>
           )}
           <button className="primary full" disabled={busy}>
-            {busy ? "Opening workspace…" : "Open workspace"}
+            {busy
+              ? "Opening workspace…"
+              : needsName
+                ? "Save name and sign in"
+                : "Open workspace"}
             <ArrowRight size={15} />
           </button>
         </form>

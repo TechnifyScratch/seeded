@@ -19,10 +19,16 @@ export async function requireUser() {
   const profile = unwrap(
     await db()
       .from("profiles")
-      .select("id,email,role")
+      .select("id,email,role,first_name,last_name")
       .eq("id", user.id)
       .maybeSingle(),
-  ) as { id: string; email: string; role: "admin" | "observer" } | null;
+  ) as {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: "admin" | "observer";
+  } | null;
   if (!profile)
     throw new HttpError(403, "This account has not been invited to Seeded.");
   return profile;

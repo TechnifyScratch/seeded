@@ -206,6 +206,7 @@ export type Snapshot = {
   configured: boolean;
   role: "admin" | "observer";
   email: string;
+  displayName?: string;
   experiments: Experiment[];
   experiment: Experiment | null;
   memories: Memory[];

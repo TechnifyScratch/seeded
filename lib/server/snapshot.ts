@@ -53,6 +53,7 @@ export async function getSnapshot(id?: string): Promise<Snapshot> {
     configured: true,
     role: user.role,
     email: user.email,
+    displayName: [user.first_name, user.last_name].filter(Boolean).join(" "),
     experiments,
     experiment,
   };

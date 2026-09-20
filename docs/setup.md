@@ -34,7 +34,22 @@ Never prefix private keys with `NEXT_PUBLIC_`. Do not commit `.env.local`. Chang
 
 ## Supabase setup
 
-For a hosted project, install the official Supabase CLI and run:
+### New hosted project: one SQL file
+
+Open your Supabase project's **SQL Editor**, create a new query, paste the entire contents of [`supabase/setup.sql`](../supabase/setup.sql), and run it as `postgres`. Run this once on a fresh project. It installs all six current migrations in one transaction, including the constitution, skill library, security policies, Realtime publication entries, engine functions, and access-code tables. It does not create demo data or an Auth user.
+
+After it succeeds, configure the environment variables and Auth settings below, then run the **Provision an access code** command. Create your first experiment in the app's Settings after signing in.
+
+Do not also apply migrations 001–006 to this project. If you later switch to the Supabase CLI, link the project and record the already installed versions before pushing newer migrations:
+
+```sh
+supabase migration repair --status applied 202609180001 202609180002 202609180003 202609180004 202609180005 202609180006
+supabase db push
+```
+
+### Alternative: Supabase CLI
+
+Instead of the single SQL file, install the official Supabase CLI and run:
 
 ```sh
 supabase login
@@ -54,6 +69,16 @@ Use the URL and anon/service keys reported by the CLI. Local development uses th
 Migrations create all tables, constraints, indexes, immutable record triggers, membership RLS, service-only transactional RPCs, the exact constitution, and the reviewed skill registry. They also add only observer-safe tables to `supabase_realtime`. Do not publish `environment_objects`: it contains hidden truth. Keep the default Supabase `public` schema grants; the migration explicitly revokes browser mutation privileges and detailed skill-column reads.
 
 Set the Auth Site URL to your app origin and allow `/auth/callback` for that origin. The application uses access-code sign-in; no public signup is offered.
+
+### Two codes configured in Vercel
+
+Set `SEEDED_ACCESS_CODE_1` and `SEEDED_ACCESS_CODE_2` in Vercel's environment variables, then redeploy. Choose two different codes, each 16–256 characters (long random codes are recommended). Keep these server-only; do not use a `NEXT_PUBLIC_` prefix. The Supabase URL, anon key, and service-role key are still required.
+
+Each code creates an **administrator** on its first use. The login screen first validates the code, then asks for first and last name. The name is saved in Supabase and appears in the workspace. Later logins go straight to the same identity; supplying a different name cannot overwrite it. Anyone with that code signs in as that person.
+
+Each environment variable slot stays associated with its person. Replacing a code rotates the credential while retaining the name and identity. Removing the variable disables that login path; existing sessions remain active until revoked in Supabase. Codes entered through this flow are not stored in the database.
+
+For a new database, run the updated `supabase/setup.sql`. If you already ran the earlier setup, run **only** `supabase/migrations/202609180006_named_access.sql`. No manual account provisioning is needed for these two codes. The CLI method below remains available for additional accounts.
 
 ### Provision an access code
 

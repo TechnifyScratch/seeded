@@ -1,3 +1,4 @@
+import { configuredSlot, slotProfile } from "@/lib/server/access-slots";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { hashAccessCode } from "@/lib/domain/access-code";
@@ -12,10 +13,7 @@ export async function POST(request: Request) {
   try {
     sameOrigin(request);
     if (!configured())
-      throw new HttpError(
-        503,
-        "Connect Supabase and provision your access code before signing in.",
-      );
+      throw new HttpError(503, "Connect Supabase before signing in.");
     const address =
       request.headers.get("x-vercel-forwarded-for") ??
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -31,28 +29,42 @@ export async function POST(request: Request) {
     });
     if (!globalAllowed || !localAllowed)
       throw new HttpError(429, "Too many attempts. Try again in a minute.");
-    const { code } = z
-      .strictObject({ code: z.string().min(16).max(256) })
+    const { code, firstName, lastName } = z
+      .strictObject({
+        code: z.string().min(16).max(256),
+        firstName: z.string().trim().min(1).max(80).optional(),
+        lastName: z.string().trim().min(1).max(80).optional(),
+      })
       .parse(await readBody(request));
-    const credential = unwrap(
-      await db()
-        .from("access_codes")
-        .select("profile_id,expires_at")
-        .eq("code_hash", hashAccessCode(code))
-        .eq("enabled", true)
-        .maybeSingle(),
-    ) as { profile_id: string; expires_at: string | null } | null;
-    if (
-      !credential ||
-      (credential.expires_at && Date.parse(credential.expires_at) <= Date.now())
-    )
-      throw new HttpError(401, "Invalid or expired access code.");
+    const slot = configuredSlot(code);
+    let profileId: string;
+    if (slot !== null) {
+      const id = await slotProfile(slot, firstName, lastName);
+      if (!id)
+        return Response.json(
+          { needsName: true },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      profileId = id;
+    } else {
+      const credential = unwrap(
+        await db()
+          .from("access_codes")
+          .select("profile_id,expires_at")
+          .eq("code_hash", hashAccessCode(code))
+          .eq("enabled", true)
+          .maybeSingle(),
+      ) as { profile_id: string; expires_at: string | null } | null;
+      if (
+        !credential ||
+        (credential.expires_at &&
+          Date.parse(credential.expires_at) <= Date.now())
+      )
+        throw new HttpError(401, "Invalid or expired access code.");
+      profileId = credential.profile_id;
+    }
     const profile = unwrap(
-      await db()
-        .from("profiles")
-        .select("email")
-        .eq("id", credential.profile_id)
-        .single(),
+      await db().from("profiles").select("email").eq("id", profileId).single(),
     ) as { email: string };
     // Mint and redeem a one-time Auth token on the server. No email is sent and no token is returned to JS.
     const { data: link, error } = await db().auth.admin.generateLink({

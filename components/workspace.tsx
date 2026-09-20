@@ -245,11 +245,12 @@ export default function Workspace({
             </span>
             <div>
               <strong>
-                {data.email
-                  ? data.email.endsWith("@seeded.invalid")
-                    ? `Research ${data.role}`
-                    : data.email.split("@")[0]
-                  : "Research workspace"}
+                {data.displayName ||
+                  (data.email
+                    ? data.email.endsWith("@seeded.invalid")
+                      ? `Research ${data.role}`
+                      : data.email.split("@")[0]
+                    : "Research workspace")}
               </strong>
               <small>{data.configured ? data.role : "Setup required"}</small>
             </div>

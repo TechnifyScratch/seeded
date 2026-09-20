@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
   eq: vi.fn(),
   mint: vi.fn(),
   verify: vi.fn(),
+  slot: vi.fn(),
+  slotProfile: vi.fn(),
+}));
+vi.mock("../lib/server/access-slots", () => ({
+  configuredSlot: mocks.slot,
+  slotProfile: mocks.slotProfile,
 }));
 vi.mock("../lib/server/db", () => ({
   configured: () => mocks.configured,
@@ -50,6 +56,8 @@ function request(body: unknown = { code }, origin = "http://localhost:3000") {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.slot.mockReturnValue(null);
+  mocks.slotProfile.mockResolvedValue(null);
   mocks.valid = true;
   mocks.allowed = true;
   mocks.configured = true;
@@ -99,4 +107,31 @@ describe("Server-side code login", () => {
     expect((await POST(request())).status).toBe(503);
     expect(mocks.mint).not.toHaveBeenCalled();
   });
+});
+
+it("asks for names for an unclaimed configured code without creating a session", async () => {
+  mocks.slot.mockReturnValue(1);
+  const response = await POST(request());
+  expect(await response.json()).toEqual({ needsName: true });
+  expect(mocks.mint).not.toHaveBeenCalled();
+});
+it("saves names for the configured slot and logs in", async () => {
+  mocks.slot.mockReturnValue(2);
+  mocks.slotProfile.mockResolvedValue("saved-profile");
+  const response = await POST(
+    request({ code, firstName: " Ada ", lastName: "Lovelace" }),
+  );
+  expect(response.status).toBe(200);
+  expect(mocks.slotProfile).toHaveBeenCalledWith(2, "Ada", "Lovelace");
+  expect(mocks.eq).toHaveBeenCalledWith("id", "saved-profile");
+});
+it("logs a returning configured code into its existing identity without asking for names", async () => {
+  mocks.slot.mockReturnValue(1);
+  mocks.slotProfile.mockResolvedValue("saved-profile");
+  expect(await (await POST(request())).json()).toEqual({ ok: true });
+});
+it("rejects blank names", async () => {
+  expect(
+    (await POST(request({ code, firstName: " ", lastName: "Person" }))).status,
+  ).toBe(400);
 });

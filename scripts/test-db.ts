@@ -5,11 +5,15 @@ const db = new PGlite();
 await db.exec(
   `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create publication supabase_realtime;create function public.digest(text,text) returns bytea language sql immutable as $$select sha256(convert_to($1,'UTF8'))$$;`,
 );
-for (const file of readdirSync("supabase/migrations")
-  .filter((f) => f.endsWith(".sql"))
-  .sort())
+const sqlFiles = process.argv.includes("--setup")
+  ? ["supabase/setup.sql"]
+  : readdirSync("supabase/migrations")
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((file) => `supabase/migrations/${file}`);
+for (const file of sqlFiles)
   await db.exec(
-    readFileSync(`supabase/migrations/${file}`, "utf8").replace(
+    readFileSync(file, "utf8").replace(
       "create extension if not exists pgcrypto;",
       "-- Core SHA-256 shim for embedded PostgreSQL; production uses pgcrypto.",
     ),
@@ -26,6 +30,40 @@ await db.query(
   "insert into profiles(id,email,role) values($1,'admin@test.local','admin'),($2,'observer@test.local','observer'),($3,'outsider@test.local','observer')",
   [admin, observer, outsider],
 );
+const namedUser = "10000000-0000-4000-8000-000000000004";
+const competingUser = "10000000-0000-4000-8000-000000000005";
+await db.query("insert into auth.users values($1),($2)", [
+  namedUser,
+  competingUser,
+]);
+const claimSlot = async (id: string, first: string) =>
+  (
+    await db.query<{ id: string }>(
+      "select claim_access_slot(1,$1,'named@seeded.invalid',$2,'Person') id",
+      [id, first],
+    )
+  ).rows[0].id;
+assert.equal(await claimSlot(namedUser, "First"), namedUser);
+assert.equal(await claimSlot(competingUser, "Replacement"), namedUser);
+assert.equal(
+  (
+    await db.query<{ first_name: string }>(
+      "select first_name from profiles where id=$1",
+      [namedUser],
+    )
+  ).rows[0].first_name,
+  "First",
+);
+await db.exec("set role authenticated");
+await assert.rejects(
+  () => db.query("select * from access_slots"),
+  /permission denied/,
+);
+await assert.rejects(
+  () => claimSlot(competingUser, "Replacement"),
+  /permission denied/,
+);
+await db.exec("reset role");
 async function command(command: string, e: string | null, data: object = {}) {
   return (
     await db.query<{ id: string }>(
