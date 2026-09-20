@@ -1,5 +1,6 @@
 # Operational boundaries
 
+- **Access codes:** Login exchanges a verified code hash for a Supabase session server-side; codes map to provisioned identities. Raw codes never reach database storage or logs. Database-backed rate limits protect the login route. Provision distinct codes for distinct users/roles.
 - **Authentication:** Supabase verifies the user on every API operation; database profiles, not client metadata, determine role. Observers require explicit experiment membership. RLS protects direct authenticated reads as well as the application routes.
 - **Secrets:** Service and Anthropic clients import `server-only`. Private values never enter React props or public environment variables. Model context uses an explicit environment projection.
 - **Mutation boundary:** All writes use service-role RPCs after route authorization. Browser roles have no write policies or privileges. Public EXECUTE on mutation RPCs is revoked. Do not expose service-role tooling to the model.
@@ -14,3 +15,7 @@
 - **Pagination:** Observer lists initially load recent records. Use Load earlier/older to page through history. Model context remains independently bounded. Graph filters operate on loaded nodes. This is explicitly labeled; do not interpret loaded counts as a claim that no older information exists.
 - **Hosting:** One minute-level scheduler drives development without an open browser. Vercel Cron's frequency depends on plan. Monitor failed worker requests, Anthropic quota, database growth, and expired leases. The scheduler authenticates separately from browser sessions.
 - **External verification:** Embedded PostgreSQL validates SQL/RLS/transaction behavior. Actual Supabase Auth, hosted Realtime delivery and Anthropic account/model access require staging credentials for an end-to-end deployment smoke test.
+
+## Access-code rotation
+
+Provision a new unique code for a new profile, or insert a new code hash for the existing profile through trusted server/database administration. Disable the previous `access_codes` record. Hashes and expiry metadata are not readable through browser roles. A code's permissions come from `profiles.role` and `experiment_members`, never from fields supplied at login. Code expiry/disable blocks new sessions; revoke existing Supabase refresh sessions separately when needed. Never reuse the code as the Supabase service-role key, Anthropic key, or cron secret.

@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:db": "node --import tsx scripts/test-db.ts",
     "skills:import": "python3 scripts/import_skills.py",
-    "admin:create": "node --env-file=.env.local --import tsx scripts/create-admin.ts"
+    "access:create": "node --env-file=.env.local --import tsx scripts/create-access.ts"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -35,9 +35,10 @@
     "@types/three": "^0.180.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
-    "vitest": "^3.2.0",
+    "vitest": "5.0.1",
     "tsx": "^4.20.0",
-    "@electric-sql/pglite": "^0.3.10"
+    "@electric-sql/pglite": "^0.3.10",
+    "prettier": "^3.6.0"
   },
   "type": "module"
 }

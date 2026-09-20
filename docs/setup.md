@@ -10,7 +10,8 @@ Requirements: Node.js 22+, npm, a Supabase project (or Supabase CLI + Docker), a
 
 ```sh
 npm ci
-cp .env.example .env.local
+# For a fresh checkout only; preserve an existing .env.local.
+cp -n .env.example .env.local
 # Fill in .env.local using the instructions below.
 npm run dev
 ```
@@ -52,20 +53,32 @@ Use the URL and anon/service keys reported by the CLI. Local development uses th
 
 Migrations create all tables, constraints, indexes, immutable record triggers, membership RLS, service-only transactional RPCs, the exact constitution, and the reviewed skill registry. They also add only observer-safe tables to `supabase_realtime`. Do not publish `environment_objects`: it contains hidden truth. Keep the default Supabase `public` schema grants; the migration explicitly revokes browser mutation privileges and detailed skill-column reads.
 
-Set the Auth Site URL to your app origin and allow `/auth/callback` for that origin. Password sign-in is supported; no public signup is offered.
+Set the Auth Site URL to your app origin and allow `/auth/callback` for that origin. The application uses access-code sign-in; no public signup is offered.
 
-### Create an administrator or observer
+### Provision an access code
 
-The account provisioning script uses the service key and takes passwords from an environment variable, not a command-line argument:
+Sign-in uses one access-code field. No email or password is requested from the person signing in. Behind the scenes, every code maps to a distinct Supabase Auth identity and an admin/observer profile, preserving session security and RLS.
+
+Your supplied administrator code has a local SHA-256 value in the ignored `.env.local` file. After adding the Supabase keys and applying migrations (including migration 005), provision it:
 
 ```sh
-read -s SEEDED_USER_PASSWORD
-export SEEDED_USER_PASSWORD
-npm run admin:create -- you@example.com admin
-unset SEEDED_USER_PASSWORD
+npm run access:create -- admin "Research administrator"
 ```
 
-Use `observer` in place of `admin` for observer accounts. The script prints the new profile UUID. Sign in at `/login`. Administrators see all experiments. Observers see only experiments where they have membership. In Settings, grant an observer's profile UUID access to a specific experiment. A browser user cannot promote their own profile or grant membership.
+For a fresh checkout or a different observer code, supply a long random code using an environment variable rather than placing it in shell history:
+
+```sh
+read -s SEEDED_ACCESS_CODE
+export SEEDED_ACCESS_CODE
+npm run access:create -- observer "Research observer"
+unset SEEDED_ACCESS_CODE
+```
+
+The script accepts either `SEEDED_ACCESS_CODE` (32+ characters) or `SEEDED_ACCESS_CODE_SHA256` (a precomputed hash). These are provisioning-only variables, not public or browser variables. The raw code is never stored in the database, response, or logs. Escaped Markdown `\@` is accepted as `@` when hashing a pasted code.
+
+Open `/login` and paste the code. The server checks its hash, enabled status, and optional expiry, generates and redeems a one-time Supabase token without sending email, and sets the normal session cookies. Login attempts are rate limited in PostgreSQL (10/minute per address bucket, 100/minute globally), so serverless restarts do not reset the limits. Public signup remains disabled.
+
+The printed profile UUID can be granted experiment membership in Settings. Administrators see all experiments; observers see only assigned experiments. A shared code represents a shared identity: issue separate codes if people need different roles or attribution. To revoke future logins, disable its `access_codes` record through trusted Supabase administration; separately revoke that identity's existing Auth sessions if immediate sign-out is needed.
 
 ## Constitution
 

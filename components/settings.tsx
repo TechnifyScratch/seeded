@@ -1,13 +1,569 @@
-'use client';
-import { useState } from 'react';
-import Link from 'next/link';
-import { Plus,Pause,Play,Square,ArrowRight,ShieldCheck,KeyRound } from 'lucide-react';
-import type { Snapshot,ObjectInput } from '@/lib/domain/schema';
-type Props={data:Snapshot;command:(body:Record<string,unknown>)=>Promise<void>;busy:boolean};
-const initialObject:ObjectInput={name:'',public_description:'',location:'center',available_actions:['inspect'],hidden_properties:{inspect_text:'',read_text:'',interaction_text:'',reveals_on:'never',reveal_text:''}};
-export default function Settings({data,command,busy}:Props){const[name,setName]=useState('');const[budget,setBudget]=useState(data.experiment?.action_budget??20);const[cost,setCost]=useState(data.experiment?.skill_costs_action??false);const[object,setObject]=useState<ObjectInput>(initialObject);const[objectId,setObjectId]=useState('');const[member,setMember]=useState('');const[stop,setStop]=useState(false);const e=data.experiment;const admin=data.role==='admin';
- if(!data.configured)return <div className="setup-grid"><section className="panel padded"><span className="setup-icon"><KeyRound size={23}/></span><h2>Connect your research workspace</h2><p>Seeded is installed. Connect the services below to initialize a real experiment.</p><ol className="setup-list"><li><strong>Configure Supabase</strong><span>Copy .env.example to .env.local, add your project URL and keys, then apply the SQL migrations.</span></li><li><strong>Add Anthropic credentials</strong><span>Set your API key and a Claude Sonnet model ID.</span></li><li><strong>Create an administrator</strong><span>Run the admin:create command, then sign in with your invited account.</span></li></ol><Link href="/login" className="button primary">Go to sign in <ArrowRight size={15}/></Link></section><section className="panel padded"><ShieldCheck size={24}/><h3>Ready for a clean beginning</h3><p>The versioned constitution and reviewed skills are installed by the migrations. Real experiments begin with no fabricated memories or concepts.</p><p>Setup instructions and deployment requirements are in README.md.</p></section></div>;
- return <div className="settings-grid"><section className="panel"><div className="panel-head"><h3>Experiment controls</h3><span className="type-tag">{admin?'Administrator':'Read only'}</span></div><div className="padded">{e?<><h2>{e.name}</h2><p>Day {e.day} · {e.actions_used} of {e.action_budget} actions used · {e.status.replace('_',' ')}</p>{admin&&<><div className="button-row"><button disabled={busy||!['paused','running'].includes(e.status)||e.is_demo} onClick={()=>command({command:e.status==='running'?'pause':'resume',experiment_id:e.id})}>{e.status==='running'?<Pause size={15}/>:<Play size={15}/>} {e.status==='running'?'Pause':'Start / resume'}</button><button disabled={busy||e.status==='stopped'||e.status==='day_complete'||e.is_demo} onClick={()=>command({command:'end_day',experiment_id:e.id})}>End day & reflect</button><button disabled={busy||e.status!=='day_complete'} onClick={()=>command({command:'next_day',experiment_id:e.id})}>Start next day</button></div><form onSubmit={ev=>{ev.preventDefault();void command({command:'budget',experiment_id:e.id,action_budget:budget,skill_costs_action:cost});}}><label>Actions per developmental day<input type="number" min={Math.max(1,e.actions_used)} max="200" required value={budget} onChange={ev=>setBudget(+ev.target.value)}/></label><label className="check-label"><input type="checkbox" checked={cost} onChange={ev=>setCost(ev.target.checked)}/> Skill selection consumes an action</label><button disabled={busy||!['paused','day_complete'].includes(e.status)}>Save budget</button><small>Pause the experiment before changing its budget.</small></form><hr/><div className="danger-zone"><strong>Emergency stop</strong><p>Immediately invalidates in-flight work. This experiment cannot be resumed.</p>{stop?<div className="button-row"><button className="danger" disabled={busy} onClick={()=>{void command({command:'stop',experiment_id:e.id});setStop(false);}}>Confirm permanent stop</button><button onClick={()=>setStop(false)}>Cancel</button></div>:<button className="danger" onClick={()=>setStop(true)} disabled={e.status==='stopped'}><Square size={13}/> Emergency stop</button>}</div></>}</>:<p>No experiment has been created.</p>}</div></section><div className="stack"><section className="panel"><div className="panel-head"><h3>Capabilities</h3></div><div className="padded">{data.capabilities.map(c=><label className="capability" key={c.id}><span><strong>{String(c.name)}</strong><small>Server-enforced experimental capability</small></span><input type="checkbox" role="switch" checked={Boolean(c.enabled)} disabled={!admin||busy} onChange={ev=>command({command:'capability',experiment_id:e?.id,name:c.name,enabled:ev.target.checked})}/></label>)}{!e&&<p>Capabilities become available after initialization.</p>}</div></section><section className="panel"><div className="panel-head"><h3>Constitution</h3><ShieldCheck size={16}/></div><div className="padded">{data.constitutions.filter(c=>!e||c.id===e.constitution_id).map(c=><div key={c.id}><strong>{String(c.name)}</strong><p>Immutable · {c.active?'Active':'Inactive'}</p><label>SHA-256<code className="hash">{String(c.sha256)}</code></label></div>)}<small>The core constitution is separate from skills and observer messages.</small></div></section></div>
- {admin&&<><section className="panel"><div className="panel-head"><h3>Create an experiment</h3><Plus size={16}/></div><form className="padded" onSubmit={ev=>{ev.preventDefault();void command({command:'create',name,action_budget:20});setName('');}}><label>Experiment name<input required maxLength={100} placeholder="e.g. Experiment 1" value={name} onChange={ev=>setName(ev.target.value)}/></label><p>Begins paused with an empty environment and memory. Uses the active constitution version.</p><button className="primary" disabled={busy}>Create experiment</button><hr/><button type="button" disabled={busy} onClick={()=>command({command:'demo',name:'Demo · synthetic UI testing',action_budget:20})}>Create separate synthetic demo</button><small>Demos are explicitly labeled and cannot run the model engine.</small></form></section>{e&&<section className="panel"><div className="panel-head"><h3>Environment object</h3></div><form className="padded" onSubmit={ev=>{ev.preventDefault();void command({command:'object',experiment_id:e.id,...(objectId?{object_id:objectId}:{}),object});}}><label>Object to configure<select value={objectId} onChange={ev=>{setObjectId(ev.target.value);const o=data.environment_objects.find(o=>o.id===ev.target.value);setObject(o?{...initialObject,name:String(o.name),public_description:String(o.public_description),location:o.location as ObjectInput['location'],available_actions:o.available_actions as ObjectInput['available_actions']}:initialObject);}}><option value="">Add new object</option>{data.environment_objects.map(o=><option key={o.id} value={o.id}>{String(o.name)}</option>)}</select></label>{objectId&&<p className="notice">Editing replaces the object definition, including hidden responses. Re-enter them below.</p>}<label>Name<input required value={object.name} onChange={ev=>setObject({...object,name:ev.target.value})}/></label><label>Visible description<textarea required maxLength={2000} value={object.public_description} onChange={ev=>setObject({...object,public_description:ev.target.value})}/></label><label>Location<select value={object.location} onChange={ev=>setObject({...object,location:ev.target.value as ObjectInput['location']})}>{['center','north','south','east','west'].map(l=><option key={l}>{l}</option>)}</select></label><fieldset><legend>Permitted interactions</legend><div className="button-row">{(['inspect','read','press','open','close','toggle'] as const).map(a=><label className="check-label" key={a}><input type="checkbox" checked={object.available_actions.includes(a)} onChange={ev=>setObject({...object,available_actions:ev.target.checked?[...object.available_actions,a]:object.available_actions.filter(v=>v!==a)})}/>{a}</label>)}</div></fieldset><details><summary>Hidden environment responses</summary>{(['inspect_text','read_text','interaction_text','reveal_text'] as const).map(k=><label key={k}>{k.replaceAll('_',' ')}<textarea maxLength={1500} value={object.hidden_properties[k]} onChange={ev=>setObject({...object,hidden_properties:{...object.hidden_properties,[k]:ev.target.value}})}/></label>)}<label>Reveal hidden text on<select value={object.hidden_properties.reveals_on} onChange={ev=>setObject({...object,hidden_properties:{...object.hidden_properties,reveals_on:ev.target.value as ObjectInput['hidden_properties']['reveals_on']}})}>{['never','inspect','read','open','press','toggle'].map(a=><option key={a}>{a}</option>)}</select></label></details><button disabled={busy||e.status!=='paused'}>Save object & record visible observation</button></form></section>}{e&&<section className="panel"><div className="panel-head"><h3>Observer access</h3></div><form className="padded" onSubmit={ev=>{ev.preventDefault();void command({command:'member',experiment_id:e.id,profile_id:member});}}><p>Create an invited profile with the administrative CLI, then grant experiment membership here.</p><label>Profile UUID<input required value={member} onChange={ev=>setMember(ev.target.value)}/></label><button disabled={busy}>Grant access</button></form></section>}</>}
- </div>;
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import {
+  Plus,
+  Pause,
+  Play,
+  Square,
+  ArrowRight,
+  ShieldCheck,
+  KeyRound,
+} from "lucide-react";
+import type { Snapshot, ObjectInput } from "@/lib/domain/schema";
+type Props = {
+  data: Snapshot;
+  command: (body: Record<string, unknown>) => Promise<void>;
+  busy: boolean;
+};
+const initialObject: ObjectInput = {
+  name: "",
+  public_description: "",
+  location: "center",
+  available_actions: ["inspect"],
+  hidden_properties: {
+    inspect_text: "",
+    read_text: "",
+    interaction_text: "",
+    reveals_on: "never",
+    reveal_text: "",
+  },
+};
+export default function Settings({ data, command, busy }: Props) {
+  const [name, setName] = useState("");
+  const [budget, setBudget] = useState(data.experiment?.action_budget ?? 20);
+  const [cost, setCost] = useState(
+    data.experiment?.skill_costs_action ?? false,
+  );
+  const [object, setObject] = useState<ObjectInput>(initialObject);
+  const [objectId, setObjectId] = useState("");
+  const [member, setMember] = useState("");
+  const [stop, setStop] = useState(false);
+  const e = data.experiment;
+  const admin = data.role === "admin";
+  if (!data.configured)
+    return (
+      <div className="setup-grid">
+        <section className="panel padded">
+          <span className="setup-icon">
+            <KeyRound size={23} />
+          </span>
+          <h2>Connect your research workspace</h2>
+          <p>
+            Seeded is installed. Connect the services below to initialize a real
+            experiment.
+          </p>
+          <ol className="setup-list">
+            <li>
+              <strong>Configure Supabase</strong>
+              <span>
+                Copy .env.example to .env.local, add your project URL and keys,
+                then apply the SQL migrations.
+              </span>
+            </li>
+            <li>
+              <strong>Add Anthropic credentials</strong>
+              <span>Set your API key and a Claude Sonnet model ID.</span>
+            </li>
+            <li>
+              <strong>Provision an administrator code</strong>
+              <span>
+                Run access:create, then enter your access code on the sign-in
+                screen.
+              </span>
+            </li>
+          </ol>
+          <Link href="/login" className="button primary">
+            Go to sign in <ArrowRight size={15} />
+          </Link>
+        </section>
+        <section className="panel padded">
+          <ShieldCheck size={24} />
+          <h3>Ready for a clean beginning</h3>
+          <p>
+            The versioned constitution and reviewed skills are installed by the
+            migrations. Real experiments begin with no fabricated memories or
+            concepts.
+          </p>
+          <p>
+            Setup instructions and deployment requirements are in README.md.
+          </p>
+        </section>
+      </div>
+    );
+  return (
+    <div className="settings-grid">
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Experiment controls</h3>
+          <span className="type-tag">
+            {admin ? "Administrator" : "Read only"}
+          </span>
+        </div>
+        <div className="padded">
+          {e ? (
+            <>
+              <h2>{e.name}</h2>
+              <p>
+                Day {e.day} · {e.actions_used} of {e.action_budget} actions used
+                · {e.status.replace("_", " ")}
+              </p>
+              {admin && (
+                <>
+                  <div className="button-row">
+                    <button
+                      disabled={
+                        busy ||
+                        !["paused", "running"].includes(e.status) ||
+                        e.is_demo
+                      }
+                      onClick={() =>
+                        command({
+                          command: e.status === "running" ? "pause" : "resume",
+                          experiment_id: e.id,
+                        })
+                      }
+                    >
+                      {e.status === "running" ? (
+                        <Pause size={15} />
+                      ) : (
+                        <Play size={15} />
+                      )}{" "}
+                      {e.status === "running" ? "Pause" : "Start / resume"}
+                    </button>
+                    <button
+                      disabled={
+                        busy ||
+                        e.status === "stopped" ||
+                        e.status === "day_complete" ||
+                        e.is_demo
+                      }
+                      onClick={() =>
+                        command({ command: "end_day", experiment_id: e.id })
+                      }
+                    >
+                      End day & reflect
+                    </button>
+                    <button
+                      disabled={busy || e.status !== "day_complete"}
+                      onClick={() =>
+                        command({ command: "next_day", experiment_id: e.id })
+                      }
+                    >
+                      Start next day
+                    </button>
+                  </div>
+                  <form
+                    onSubmit={(ev) => {
+                      ev.preventDefault();
+                      void command({
+                        command: "budget",
+                        experiment_id: e.id,
+                        action_budget: budget,
+                        skill_costs_action: cost,
+                      });
+                    }}
+                  >
+                    <label>
+                      Actions per developmental day
+                      <input
+                        type="number"
+                        min={Math.max(1, e.actions_used)}
+                        max="200"
+                        required
+                        value={budget}
+                        onChange={(ev) => setBudget(+ev.target.value)}
+                      />
+                    </label>
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={cost}
+                        onChange={(ev) => setCost(ev.target.checked)}
+                      />{" "}
+                      Skill selection consumes an action
+                    </label>
+                    <button
+                      disabled={
+                        busy || !["paused", "day_complete"].includes(e.status)
+                      }
+                    >
+                      Save budget
+                    </button>
+                    <small>
+                      Pause the experiment before changing its budget.
+                    </small>
+                  </form>
+                  <hr />
+                  <div className="danger-zone">
+                    <strong>Emergency stop</strong>
+                    <p>
+                      Immediately invalidates in-flight work. This experiment
+                      cannot be resumed.
+                    </p>
+                    {stop ? (
+                      <div className="button-row">
+                        <button
+                          className="danger"
+                          disabled={busy}
+                          onClick={() => {
+                            void command({
+                              command: "stop",
+                              experiment_id: e.id,
+                            });
+                            setStop(false);
+                          }}
+                        >
+                          Confirm permanent stop
+                        </button>
+                        <button onClick={() => setStop(false)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <button
+                        className="danger"
+                        onClick={() => setStop(true)}
+                        disabled={e.status === "stopped"}
+                      >
+                        <Square size={13} /> Emergency stop
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <p>No experiment has been created.</p>
+          )}
+        </div>
+      </section>
+      <div className="stack">
+        <section className="panel">
+          <div className="panel-head">
+            <h3>Capabilities</h3>
+          </div>
+          <div className="padded">
+            {data.capabilities.map((c) => (
+              <label className="capability" key={c.id}>
+                <span>
+                  <strong>{String(c.name)}</strong>
+                  <small>Server-enforced experimental capability</small>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={Boolean(c.enabled)}
+                  disabled={!admin || busy}
+                  onChange={(ev) =>
+                    command({
+                      command: "capability",
+                      experiment_id: e?.id,
+                      name: c.name,
+                      enabled: ev.target.checked,
+                    })
+                  }
+                />
+              </label>
+            ))}
+            {!e && <p>Capabilities become available after initialization.</p>}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-head">
+            <h3>Constitution</h3>
+            <ShieldCheck size={16} />
+          </div>
+          <div className="padded">
+            {data.constitutions
+              .filter((c) => !e || c.id === e.constitution_id)
+              .map((c) => (
+                <div key={c.id}>
+                  <strong>{String(c.name)}</strong>
+                  <p>Immutable · {c.active ? "Active" : "Inactive"}</p>
+                  <label>
+                    SHA-256<code className="hash">{String(c.sha256)}</code>
+                  </label>
+                </div>
+              ))}
+            <small>
+              The core constitution is separate from skills and observer
+              messages.
+            </small>
+          </div>
+        </section>
+      </div>
+      {admin && (
+        <>
+          <section className="panel">
+            <div className="panel-head">
+              <h3>Create an experiment</h3>
+              <Plus size={16} />
+            </div>
+            <form
+              className="padded"
+              onSubmit={(ev) => {
+                ev.preventDefault();
+                void command({ command: "create", name, action_budget: 20 });
+                setName("");
+              }}
+            >
+              <label>
+                Experiment name
+                <input
+                  required
+                  maxLength={100}
+                  placeholder="e.g. Experiment 1"
+                  value={name}
+                  onChange={(ev) => setName(ev.target.value)}
+                />
+              </label>
+              <p>
+                Begins paused with an empty environment and memory. Uses the
+                active constitution version.
+              </p>
+              <button className="primary" disabled={busy}>
+                Create experiment
+              </button>
+              <hr />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  command({
+                    command: "demo",
+                    name: "Demo · synthetic UI testing",
+                    action_budget: 20,
+                  })
+                }
+              >
+                Create separate synthetic demo
+              </button>
+              <small>
+                Demos are explicitly labeled and cannot run the model engine.
+              </small>
+            </form>
+          </section>
+          {e && (
+            <section className="panel">
+              <div className="panel-head">
+                <h3>Environment object</h3>
+              </div>
+              <form
+                className="padded"
+                onSubmit={(ev) => {
+                  ev.preventDefault();
+                  void command({
+                    command: "object",
+                    experiment_id: e.id,
+                    ...(objectId ? { object_id: objectId } : {}),
+                    object,
+                  });
+                }}
+              >
+                <label>
+                  Object to configure
+                  <select
+                    value={objectId}
+                    onChange={(ev) => {
+                      setObjectId(ev.target.value);
+                      const o = data.environment_objects.find(
+                        (o) => o.id === ev.target.value,
+                      );
+                      setObject(
+                        o
+                          ? {
+                              ...initialObject,
+                              name: String(o.name),
+                              public_description: String(o.public_description),
+                              location: o.location as ObjectInput["location"],
+                              available_actions:
+                                o.available_actions as ObjectInput["available_actions"],
+                            }
+                          : initialObject,
+                      );
+                    }}
+                  >
+                    <option value="">Add new object</option>
+                    {data.environment_objects.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {String(o.name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {objectId && (
+                  <p className="notice">
+                    Editing replaces the object definition, including hidden
+                    responses. Re-enter them below.
+                  </p>
+                )}
+                <label>
+                  Name
+                  <input
+                    required
+                    value={object.name}
+                    onChange={(ev) =>
+                      setObject({ ...object, name: ev.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Visible description
+                  <textarea
+                    required
+                    maxLength={2000}
+                    value={object.public_description}
+                    onChange={(ev) =>
+                      setObject({
+                        ...object,
+                        public_description: ev.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Location
+                  <select
+                    value={object.location}
+                    onChange={(ev) =>
+                      setObject({
+                        ...object,
+                        location: ev.target.value as ObjectInput["location"],
+                      })
+                    }
+                  >
+                    {["center", "north", "south", "east", "west"].map((l) => (
+                      <option key={l}>{l}</option>
+                    ))}
+                  </select>
+                </label>
+                <fieldset>
+                  <legend>Permitted interactions</legend>
+                  <div className="button-row">
+                    {(
+                      [
+                        "inspect",
+                        "read",
+                        "press",
+                        "open",
+                        "close",
+                        "toggle",
+                      ] as const
+                    ).map((a) => (
+                      <label className="check-label" key={a}>
+                        <input
+                          type="checkbox"
+                          checked={object.available_actions.includes(a)}
+                          onChange={(ev) =>
+                            setObject({
+                              ...object,
+                              available_actions: ev.target.checked
+                                ? [...object.available_actions, a]
+                                : object.available_actions.filter(
+                                    (v) => v !== a,
+                                  ),
+                            })
+                          }
+                        />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <details>
+                  <summary>Hidden environment responses</summary>
+                  {(
+                    [
+                      "inspect_text",
+                      "read_text",
+                      "interaction_text",
+                      "reveal_text",
+                    ] as const
+                  ).map((k) => (
+                    <label key={k}>
+                      {k.replaceAll("_", " ")}
+                      <textarea
+                        maxLength={1500}
+                        value={object.hidden_properties[k]}
+                        onChange={(ev) =>
+                          setObject({
+                            ...object,
+                            hidden_properties: {
+                              ...object.hidden_properties,
+                              [k]: ev.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    Reveal hidden text on
+                    <select
+                      value={object.hidden_properties.reveals_on}
+                      onChange={(ev) =>
+                        setObject({
+                          ...object,
+                          hidden_properties: {
+                            ...object.hidden_properties,
+                            reveals_on: ev.target
+                              .value as ObjectInput["hidden_properties"]["reveals_on"],
+                          },
+                        })
+                      }
+                    >
+                      {[
+                        "never",
+                        "inspect",
+                        "read",
+                        "open",
+                        "press",
+                        "toggle",
+                      ].map((a) => (
+                        <option key={a}>{a}</option>
+                      ))}
+                    </select>
+                  </label>
+                </details>
+                <button disabled={busy || e.status !== "paused"}>
+                  Save object & record visible observation
+                </button>
+              </form>
+            </section>
+          )}
+          {e && (
+            <section className="panel">
+              <div className="panel-head">
+                <h3>Observer access</h3>
+              </div>
+              <form
+                className="padded"
+                onSubmit={(ev) => {
+                  ev.preventDefault();
+                  void command({
+                    command: "member",
+                    experiment_id: e.id,
+                    profile_id: member,
+                  });
+                }}
+              >
+                <p>
+                  Provision an observer code with the administrative CLI, then
+                  grant experiment membership here.
+                </p>
+                <label>
+                  Profile UUID
+                  <input
+                    required
+                    value={member}
+                    onChange={(ev) => setMember(ev.target.value)}
+                  />
+                </label>
+                <button disabled={busy}>Grant access</button>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

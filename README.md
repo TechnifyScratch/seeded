@@ -18,14 +18,16 @@ You'll need Node.js 22+, a Supabase project, and an Anthropic API key.
 
 ```sh
 npm ci
-cp .env.example .env.local
+cp -n .env.example .env.local
 ```
 
-Fill in `.env.local`, apply the Supabase migrations, and create an admin account using the [setup instructions](docs/setup.md). Then run:
+Fill in `.env.local`, apply the Supabase migrations, and provision an admin access code using the [setup instructions](docs/setup.md). Then run:
 
 ```sh
 npm run dev
 ```
+
+Sign in with your access code; email/password entry is not required.
 
 Open http://localhost:3000. Without credentials, you can view the empty interface, but experiments won't run.
 
